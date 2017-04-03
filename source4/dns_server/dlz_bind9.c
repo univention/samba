@@ -1266,6 +1266,20 @@ _PUBLIC_ isc_result_t dlz_configure(dns_view_t *view, dns_dlzdb_t *dlzdb,
 	return ISC_R_SUCCESS;
 }
 
+static bool b9_is_tombstoned(struct ldb_result *res) {
+	struct ldb_message_element *el;
+	struct ldb_val *val;
+	struct ldb_val tombstoned_val = data_blob_string_const("TRUE");
+
+	el = ldb_msg_find_element(res->msgs[0], "dNSTombstoned");
+	if (el == NULL) {
+		return false;
+	}
+
+	val = ldb_msg_find_val(el, &tombstoned_val);
+	return val != NULL;
+}
+
 /*
   authorize a zone update
  */
@@ -1287,11 +1301,12 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 	struct ldb_dn *dn;
 	isc_result_t result;
 	struct ldb_result *res;
-	const char * attrs[] = { NULL };
+	const char * attrs[] = { "dNSTombstoned", NULL };
 	uint32_t access_mask;
 	struct gensec_settings *settings = NULL;
 	const struct gensec_security_ops **backends = NULL;
 	size_t idx = 0;
+	bool is_tombstoned = false;
 
 	/* Remove cached credentials, if any */
 	if (state->session_info) {
@@ -1437,6 +1452,7 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 		talloc_free(res);
 	} else if (ldb_ret == LDB_SUCCESS) {
 		access_mask = SEC_STD_REQUIRED | SEC_ADS_SELF_WRITE;
+		is_tombstoned = b9_is_tombstoned(res);
 		talloc_free(res);
 	} else {
 		talloc_free(tmp_ctx);
@@ -1447,6 +1463,27 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 	ldb_ret = dsdb_check_access_on_dn(state->samdb, tmp_ctx, dn,
 						session_info->security_token,
 						access_mask, NULL);
+	/* If a machine changes it's IP address and creates a new reverse-zone
+	 * PTR, the old one gets marked as a `dNSTombstoned = TRUE`. This
+	 * prevents other machines with different GUIDS from changing the old
+	 * reverse-zone PTR. This deletes the old object in that case, so that
+	 * a new zone-object may be created.
+	 */
+	if (ldb_ret == LDB_ERR_INSUFFICIENT_ACCESS_RIGHTS && is_tombstoned) {
+		ldb_ret = ldb_delete(state->samdb, dn);
+		if (ldb_ret != LDB_SUCCESS) {
+			state->log(ISC_LOG_ERROR,
+				   "samba_dlz: to failed delete tombstoned object: error=%s",
+				   ldb_strerror(ldb_ret));
+			talloc_free(tmp_ctx);
+			return ISC_FALSE;
+		}
+		ldb_dn_remove_child_components(dn, 1);
+		access_mask = SEC_ADS_CREATE_CHILD;
+		ldb_ret = dsdb_check_access_on_dn(state->samdb, tmp_ctx, dn,
+						  session_info->security_token,
+						  access_mask, NULL);
+	}
 	if (ldb_ret != LDB_SUCCESS) {
 		state->log(ISC_LOG_INFO,
 			"samba_dlz: disallowing update of signer=%s name=%s type=%s error=%s",
