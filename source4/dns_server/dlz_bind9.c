@@ -63,6 +63,7 @@ struct dlz_bind9_data {
 	struct smb_krb5_context *smb_krb5_ctx;
 	struct auth4_context *auth_context;
 	struct auth_session_info *session_info;
+	bool is_system_session;
 	char *update_name;
 
 	/* helper functions from the dlz_dlopen driver */
@@ -748,6 +749,9 @@ _PUBLIC_ void dlz_destroy(void *dbdata)
 	dlz_bind9_state_ref_count--;
 	if (dlz_bind9_state_ref_count == 0) {
 		talloc_unlink(state, state->samdb);
+		if (state->is_system_session) {
+			state->session_info = NULL;
+		}
 		talloc_free(state);
 		dlz_bind9_state = NULL;
 	}
@@ -1281,6 +1285,25 @@ static bool b9_is_tombstoned(struct ldb_result *res) {
 }
 
 /*
+ * If `name` is a computer account (ends in $) and the records's field matches
+ * the account name (without the $), the account owns the record.
+ */
+static bool b9_account_owns_record(const char *name, struct ldb_result *record) {
+	char *dc = NULL;
+	size_t len = strlen(name);
+
+	struct ldb_message_element *el = ldb_msg_find_element(record->msgs[0], "dc");
+	if (el != NULL && el->num_values > 0) {
+		dc = (char *) el->values[0].data;
+	}
+
+	if (dc != NULL && len > 0 && name[len - 1] == '$') {
+		return strncmp(name, dc, len - 1) == 0;
+	}
+	return false;
+}
+
+/*
   authorize a zone update
  */
 _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const char *tcpaddr,
@@ -1298,19 +1321,24 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 	NTSTATUS nt_status;
 	struct gensec_security *gensec_ctx;
 	struct auth_session_info *session_info;
+	bool is_system_session = false;
 	struct ldb_dn *dn;
 	isc_result_t result;
 	struct ldb_result *res;
-	const char * attrs[] = { "dNSTombstoned", NULL };
+	const char * attrs[] = { "dNSTombstoned", "dc", NULL };
 	uint32_t access_mask;
 	struct gensec_settings *settings = NULL;
 	const struct gensec_security_ops **backends = NULL;
 	size_t idx = 0;
 	bool is_tombstoned = false;
+	bool owns_record = false;
 
 	/* Remove cached credentials, if any */
 	if (state->session_info) {
-		talloc_free(state->session_info);
+		if (!state->is_system_session) {
+			talloc_free(state->session_info);
+		}
+		state->is_system_session = false;
 		state->session_info = NULL;
 	}
 	if (state->update_name) {
@@ -1453,6 +1481,7 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 	} else if (ldb_ret == LDB_SUCCESS) {
 		access_mask = SEC_STD_REQUIRED | SEC_ADS_SELF_WRITE;
 		is_tombstoned = b9_is_tombstoned(res);
+		owns_record = b9_account_owns_record(session_info->info->account_name, res);
 		talloc_free(res);
 	} else {
 		talloc_free(tmp_ctx);
@@ -1484,6 +1513,17 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 						  session_info->security_token,
 						  access_mask, NULL);
 	}
+	/* Univention Specific: If a machine tries to access a forward/zone
+	 * without the proper access-rights, but the account of the requesting
+	 * machine matches the `dc` attribute of the record, a modification is
+	 * allowed and the privileges for this operation are escalated to
+	 * `SYSTEM`.
+	 */
+	if (ldb_ret == LDB_ERR_INSUFFICIENT_ACCESS_RIGHTS && owns_record) {
+		session_info = system_session(state->lp);
+		is_system_session = true;
+		ldb_ret = LDB_SUCCESS;
+	}
 	if (ldb_ret != LDB_SUCCESS) {
 		state->log(ISC_LOG_INFO,
 			"samba_dlz: disallowing update of signer=%s name=%s type=%s error=%s",
@@ -1499,7 +1539,12 @@ _PUBLIC_ isc_boolean_t dlz_ssumatch(const char *signer, const char *name, const 
 		talloc_free(tmp_ctx);
 		return ISC_FALSE;
 	}
-	state->session_info = talloc_steal(state, session_info);
+	state->is_system_session = is_system_session;
+	if (is_system_session) {
+		state->session_info = session_info;
+	} else {
+		state->session_info = talloc_steal(state, session_info);
+	}
 
 	state->log(ISC_LOG_INFO, "samba_dlz: allowing update of signer=%s name=%s tcpaddr=%s type=%s key=%s",
 		   signer, name, tcpaddr, type, key);
