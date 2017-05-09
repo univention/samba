@@ -705,6 +705,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 			  TALLOC_CTX *mem_ctx,
 			  struct ldb_dn *dn,
 			  bool needs_add,
+			  bool tombstoned,
 			  uint32_t serial,
 			  struct dnsp_DnssrvRpcRecord *records,
 			  uint16_t rec_count)
@@ -714,7 +715,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 	int ret;
 	WERROR werr;
 	struct ldb_message *msg = NULL;
-	bool was_tombstoned = false;
+	bool tombstoned_marker = false;
 	bool become_tombstoned = false;
 
 	msg = ldb_msg_new(mem_ctx);
@@ -754,7 +755,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 
 		if (records[i].wType == DNS_TYPE_TOMBSTONE) {
 			if (records[i].data.timestamp != 0) {
-				was_tombstoned = true;
+				tombstoned_marker = true;
 			}
 			continue;
 		}
@@ -793,7 +794,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 		enum ndr_err_code ndr_err;
 		struct timeval tv;
 
-		if (was_tombstoned) {
+		if (tombstoned && tombstoned_marker) {
 			/*
 			 * This is already a tombstoned object.
 			 * Just leave it instead of updating the time stamp.
@@ -819,7 +820,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 		become_tombstoned = true;
 	}
 
-	if (was_tombstoned || become_tombstoned) {
+	if (tombstoned || tombstoned_marker || become_tombstoned) {
 		ret = ldb_msg_add_empty(msg, "dNSTombstoned",
 					LDB_FLAG_MOD_REPLACE, NULL);
 		if (ret != LDB_SUCCESS) {

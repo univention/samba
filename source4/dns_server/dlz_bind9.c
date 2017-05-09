@@ -1709,7 +1709,7 @@ _PUBLIC_ isc_result_t dlz_addrdataset(const char *name, const char *rdatastr, vo
 
 	/* modify the record */
 	werr = dns_common_replace(state->samdb, rec, dn,
-				  needs_add,
+				  needs_add, tombstoned,
 				  state->soa_serial,
 				  recs, num_recs);
 	b9_reset_session_info(state);
@@ -1792,7 +1792,8 @@ _PUBLIC_ isc_result_t dlz_subrdataset(const char *name, const char *rdatastr, vo
 
 	/* modify the record */
 	werr = dns_common_replace(state->samdb, rec, dn,
-				  false,/* needs_add */
+				  false, /* needs_add */
+				  false, /* tombstoned */
 				  state->soa_serial,
 				  recs, num_recs);
 	b9_reset_session_info(state);
@@ -1876,7 +1877,8 @@ _PUBLIC_ isc_result_t dlz_delrdataset(const char *name, const char *type, void *
 
 	/* modify the record */
 	werr = dns_common_replace(state->samdb, tmp_ctx, dn,
-				  false,/* needs_add */
+				  false, /* needs_add */
+				  false, /* tombstoned */
 				  state->soa_serial,
 				  recs, num_recs);
 	b9_reset_session_info(state);

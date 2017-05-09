@@ -104,6 +104,7 @@ WERROR dns_replace_records(struct dns_server *dns,
 			   TALLOC_CTX *mem_ctx,
 			   struct ldb_dn *dn,
 			   bool needs_add,
+			   bool tombstoned,
 			   struct dnsp_DnssrvRpcRecord *records,
 			   uint16_t rec_count);
 WERROR dns_name2dn(struct dns_server *dns,

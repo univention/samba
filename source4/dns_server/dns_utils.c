@@ -139,13 +139,15 @@ WERROR dns_replace_records(struct dns_server *dns,
 			   TALLOC_CTX *mem_ctx,
 			   struct ldb_dn *dn,
 			   bool needs_add,
+			   bool tombstoned,
 			   struct dnsp_DnssrvRpcRecord *records,
 			   uint16_t rec_count)
 {
 	/* TODO: Autogenerate this somehow */
 	uint32_t dwSerial = 110;
 	return dns_common_replace(dns->samdb, mem_ctx, dn,
-				  needs_add, dwSerial, records, rec_count);
+				  needs_add, tombstoned, dwSerial, records,
+				  rec_count);
 }
 
 bool dns_authoritative_for_zone(struct dns_server *dns,

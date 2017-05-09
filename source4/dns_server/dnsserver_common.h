@@ -59,6 +59,7 @@ WERROR dns_common_replace(struct ldb_context *samdb,
 			  TALLOC_CTX *mem_ctx,
 			  struct ldb_dn *dn,
 			  bool needs_add,
+			  bool tombstoned,
 			  uint32_t serial,
 			  struct dnsp_DnssrvRpcRecord *records,
 			  uint16_t rec_count);

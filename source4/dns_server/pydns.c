@@ -212,6 +212,7 @@ static PyObject *py_dsdb_dns_replace(PyObject *self, PyObject *args)
 	struct ldb_dn *dn;
 	struct dnsp_DnssrvRpcRecord *records;
 	uint16_t num_records;
+	bool tombstone = false;
 
 	/*
 	 * TODO: This is a shocking abuse, but matches what the
@@ -220,7 +221,8 @@ static PyObject *py_dsdb_dns_replace(PyObject *self, PyObject *args)
 	 */
 	static const int serial = 110;
 
-	if (!PyArg_ParseTuple(args, "OsO", &py_ldb, &dns_name, &py_dns_records)) {
+	if (!PyArg_ParseTuple(args, "OsO|b", &py_ldb, &dns_name,
+			      &py_dns_records, &tombstone)) {
 		return NULL;
 	}
 	PyErr_LDB_OR_RAISE(py_ldb, samdb);
@@ -253,6 +255,7 @@ static PyObject *py_dsdb_dns_replace(PyObject *self, PyObject *args)
 				  frame,
 				  dn,
 				  false, /* Not adding a record */
+				  tombstone,
 				  serial,
 				  records,
 				  num_records);
@@ -276,6 +279,7 @@ static PyObject *py_dsdb_dns_replace_by_dn(PyObject *self, PyObject *args)
 	struct ldb_dn *dn;
 	struct dnsp_DnssrvRpcRecord *records;
 	uint16_t num_records;
+	bool tombstone = false;
 
 	/*
 	 * TODO: This is a shocking abuse, but matches what the
@@ -284,7 +288,8 @@ static PyObject *py_dsdb_dns_replace_by_dn(PyObject *self, PyObject *args)
 	 */
 	static const int serial = 110;
 
-	if (!PyArg_ParseTuple(args, "OOO", &py_ldb, &py_dn, &py_dns_records)) {
+	if (!PyArg_ParseTuple(args, "OOO|b", &py_ldb, &py_dn, &py_dns_records,
+			      &tombstone)) {
 		return NULL;
 	}
 	PyErr_LDB_OR_RAISE(py_ldb, samdb);
@@ -305,6 +310,7 @@ static PyObject *py_dsdb_dns_replace_by_dn(PyObject *self, PyObject *args)
 				  frame,
 				  dn,
 				  false, /* Not adding a record */
+				  tombstone,
 				  serial,
 				  records,
 				  num_records);

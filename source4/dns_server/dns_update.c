@@ -456,7 +456,8 @@ static WERROR handle_one_update(struct dns_server *dns,
 			rcount += 1;
 
 			werror = dns_replace_records(dns, mem_ctx, dn,
-						     needs_add, recs, rcount);
+						     needs_add, tombstoned,
+						     recs, rcount);
 			W_ERROR_NOT_OK_RETURN(werror);
 
 			return WERR_OK;
@@ -517,7 +518,8 @@ static WERROR handle_one_update(struct dns_server *dns,
 			}
 
 			werror = dns_replace_records(dns, mem_ctx, dn,
-						     needs_add, recs, rcount);
+						     needs_add, tombstoned,
+						     recs, rcount);
 			W_ERROR_NOT_OK_RETURN(werror);
 
 			return WERR_OK;
@@ -538,14 +540,16 @@ static WERROR handle_one_update(struct dns_server *dns,
 			recs[i] = recs[rcount];
 
 			werror = dns_replace_records(dns, mem_ctx, dn,
-						     needs_add, recs, rcount);
+						     needs_add, tombstoned,
+						     recs, rcount);
 			W_ERROR_NOT_OK_RETURN(werror);
 
 			return WERR_OK;
 		}
 
 		werror = dns_replace_records(dns, mem_ctx, dn,
-					     needs_add, recs, rcount+1);
+					     needs_add, tombstoned, recs,
+					     rcount+1);
 		W_ERROR_NOT_OK_RETURN(werror);
 
 		return WERR_OK;
@@ -594,7 +598,8 @@ static WERROR handle_one_update(struct dns_server *dns,
 		}
 
 		werror = dns_replace_records(dns, mem_ctx, dn,
-					     needs_add, recs, rcount);
+					     needs_add, tombstoned, recs,
+					     rcount);
 		W_ERROR_NOT_OK_RETURN(werror);
 
 		return WERR_OK;
@@ -640,7 +645,8 @@ static WERROR handle_one_update(struct dns_server *dns,
 		}
 
 		werror = dns_replace_records(dns, mem_ctx, dn,
-					     needs_add, recs, rcount);
+					     needs_add, tombstoned, recs,
+					     rcount);
 		W_ERROR_NOT_OK_RETURN(werror);
 	}
 
