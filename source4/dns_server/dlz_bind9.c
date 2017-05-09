@@ -1665,7 +1665,7 @@ _PUBLIC_ isc_result_t dlz_addrdataset(const char *name, const char *rdatastr, vo
 		return ISC_R_FAILURE;
 	}
 
-	if (tombstoned) {
+	if (tombstoned && num_recs > 0 && recs[num_recs - 1].wType == DNS_TYPE_TOMBSTONE) {
 		/*
 		 * we need to keep the existing tombstone record
 		 * and ignore it

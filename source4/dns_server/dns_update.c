@@ -419,7 +419,7 @@ static WERROR handle_one_update(struct dns_server *dns,
 	}
 	W_ERROR_NOT_OK_RETURN(werror);
 
-	if (tombstoned) {
+	if (tombstoned && rcount > 0 && recs[rcount - 1].wType == DNS_TYPE_TOMBSTONE) {
 		/*
 		 * we need to keep the existing tombstone record
 		 * and ignore it
