@@ -192,7 +192,7 @@ class DnsserverTests(RpcInterfaceTestCase):
 
         dn, record = self.get_record_from_db(self.custom_zone, "testrecord")
         record.wType = dnsp.DNS_TYPE_TOMBSTONE
-        res = self.samdb.dns_replace_by_dn(dn, [record])
+        res = self.samdb.dns_replace_by_dn(dn, [record], True)
         if res is not None:
             self.fail("Unable to update dns record to be tombstoned.")
 
