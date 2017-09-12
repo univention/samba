@@ -160,7 +160,7 @@ static NTSTATUS set_nt_acl_conn(const char *fname,
 		DBG_WARNING("open: error=%d (%s)\n", errno, strerror(errno));
 		TALLOC_FREE(frame);
 		umask(saved_umask);
-		return NT_STATUS_UNSUCCESSFUL;
+		return map_nt_error_from_unix(errno);
 	}
 
 	ret = SMB_VFS_FSTAT(fsp, &smb_fname->st);
