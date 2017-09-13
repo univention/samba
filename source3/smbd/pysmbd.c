@@ -157,7 +157,7 @@ static NTSTATUS set_nt_acl_conn(const char *fname,
 		fsp->fh->fd = SMB_VFS_OPEN(conn, smb_fname, fsp, flags, 00400);
 	}
 	if (fsp->fh->fd == -1) {
-		printf("open: error=%d (%s)\n", errno, strerror(errno));
+		DBG_WARNING("open: error=%d (%s)\n", errno, strerror(errno));
 		TALLOC_FREE(frame);
 		umask(saved_umask);
 		return NT_STATUS_UNSUCCESSFUL;
@@ -166,10 +166,9 @@ static NTSTATUS set_nt_acl_conn(const char *fname,
 	ret = SMB_VFS_FSTAT(fsp, &smb_fname->st);
 	if (ret == -1) {
 		/* If we have an fd, this stat should succeed. */
-		DEBUG(0,("Error doing fstat on open file %s "
-			"(%s)\n",
+		DBG_WARNING("Error doing fstat on open file %s (%s)\n",
 			smb_fname_str_dbg(smb_fname),
-			strerror(errno) ));
+			strerror(errno));
 		TALLOC_FREE(frame);
 		umask(saved_umask);
 		return map_nt_error_from_unix(errno);
@@ -188,7 +187,8 @@ static NTSTATUS set_nt_acl_conn(const char *fname,
 
 	status = SMB_VFS_FSET_NT_ACL( fsp, security_info_sent, sd);
 	if (!NT_STATUS_IS_OK(status)) {
-		DEBUG(0,("set_nt_acl_no_snum: fset_nt_acl returned %s.\n", nt_errstr(status)));
+		DBG_WARNING("set_nt_acl_no_snum: fset_nt_acl returned %s.\n",
+			nt_errstr(status));
 	}
 
 	SMB_VFS_CLOSE(fsp);
