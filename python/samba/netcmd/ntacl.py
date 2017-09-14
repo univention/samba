@@ -183,10 +183,11 @@ class cmd_ntacl_sysvolreset(Command):
 
     takes_options = [
         Option("--use-ntvfs", help="Set the ACLs for use with the ntvfs file server", action="store_true"),
-        Option("--use-s3fs", help="Set the ACLs for use with the default s3fs file server", action="store_true")
+        Option("--use-s3fs", help="Set the ACLs for use with the default s3fs file server", action="store_true"),
+        Option("--resume-on-error", help="Only log unsuccessful ACL operation and resume", action="store_true"),
         ]
 
-    def run(self, use_ntvfs=False, use_s3fs=False,
+    def run(self, use_ntvfs=False, use_s3fs=False, resume_on_error=False,
             credopts=None, sambaopts=None, versionopts=None):
         lp = sambaopts.get_loadparm()
         path = lp.private_path("secrets.ldb")
@@ -236,7 +237,7 @@ class cmd_ntacl_sysvolreset(Command):
         provision.setsysvolacl(samdb, logger, netlogon, sysvol, LA_uid, BA_gid,
                                domain_sid, lp.get("realm").lower(),
                                samdb.domain_dn(), lp, use_ntvfs=use_ntvfs,
-                               resume_on_error=False)
+                               resume_on_error=resume_on_error)
 
 class cmd_ntacl_sysvolcheck(Command):
     """Check sysvol ACLs match defaults (including correct ACLs on GPOs)."""
