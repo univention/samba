@@ -1505,33 +1505,45 @@ def set_nt_acl_wrapper(lp, file, sddl, domsid, backend=None, eadbfile=None,
             raise
 
 
-def set_dir_acl(path, acl, lp, domsid, use_ntvfs, passdb, service=SYSVOL_SERVICE):
-    setntacl(lp, path, acl, domsid, use_ntvfs=use_ntvfs, skip_invalid_chown=True, passdb=passdb, service=service)
+def set_dir_acl(path, acl, lp, domsid, use_ntvfs, passdb, service=SYSVOL_SERVICE, logger=None, resume_on_error=False):
+    set_nt_acl_wrapper(lp, path, acl, domsid, use_ntvfs=use_ntvfs,
+                       skip_invalid_chown=True, passdb=passdb, service=service,
+                       logger=logger, resume_on_error=resume_on_error)
     for root, dirs, files in os.walk(path, topdown=False):
         for name in files:
-            setntacl(lp, os.path.join(root, name), acl, domsid,
-                    use_ntvfs=use_ntvfs, skip_invalid_chown=True, passdb=passdb, service=service)
+            set_nt_acl_wrapper(lp, os.path.join(root, name), acl, domsid,
+                               use_ntvfs=use_ntvfs, skip_invalid_chown=True,
+                               passdb=passdb, service=service, logger=logger,
+                               resume_on_error=resume_on_error)
         for name in dirs:
-            setntacl(lp, os.path.join(root, name), acl, domsid,
-                    use_ntvfs=use_ntvfs, skip_invalid_chown=True, passdb=passdb, service=service)
+            set_nt_acl_wrapper(lp, os.path.join(root, name), acl, domsid,
+                               use_ntvfs=use_ntvfs, skip_invalid_chown=True,
+                               passdb=passdb, service=service, logger=logger,
+                               resume_on_error=resume_on_error)
 
 
-def set_gpos_acl(sysvol, dnsdomain, domainsid, domaindn, samdb, lp, use_ntvfs, passdb):
+def set_gpos_acl(sysvol, logger, dnsdomain, domainsid, domaindn, samdb, lp,
+    use_ntvfs, passdb, resume_on_error):
     """Set ACL on the sysvol/<dnsname>/Policies folder and the policy
     folders beneath.
 
     :param sysvol: Physical path for the sysvol folder
+    :param logger: Logger object
     :param dnsdomain: The DNS name of the domain
     :param domainsid: The SID of the domain
     :param domaindn: The DN of the domain (ie. DC=...)
     :param samdb: An LDB object on the SAM db
     :param lp: an LP object
+    :param resume_on_error: A boolean that indicates if the function should
+            only log a NTSTATUSError and continue.
     """
 
     # Set ACL for GPO root folder
     root_policy_path = os.path.join(sysvol, dnsdomain, "Policies")
-    setntacl(lp, root_policy_path, POLICIES_ACL, str(domainsid),
-            use_ntvfs=use_ntvfs, skip_invalid_chown=True, passdb=passdb, service=SYSVOL_SERVICE)
+    set_nt_acl_wrapper(lp, root_policy_path, POLICIES_ACL, str(domainsid),
+                       use_ntvfs=use_ntvfs, skip_invalid_chown=True,
+                       passdb=passdb, service=SYSVOL_SERVICE, logger=logger,
+                       resume_on_error=resume_on_error)
 
     res = samdb.search(base="CN=Policies,CN=System,%s"%(domaindn),
                         attrs=["cn", "nTSecurityDescriptor"],
@@ -1543,14 +1555,16 @@ def set_gpos_acl(sysvol, dnsdomain, domainsid, domaindn, samdb, lp, use_ntvfs, p
         policy_path = getpolicypath(sysvol, dnsdomain, str(policy["cn"]))
         set_dir_acl(policy_path, dsacl2fsacl(acl, domainsid), lp,
                     str(domainsid), use_ntvfs,
-                    passdb=passdb)
+                    passdb=passdb, logger=logger,
+                    resume_on_error=resume_on_error)
 
 
-def setsysvolacl(samdb, netlogon, sysvol, uid, gid, domainsid, dnsdomain,
-        domaindn, lp, use_ntvfs):
+def setsysvolacl(samdb, logger, netlogon, sysvol, uid, gid, domainsid,
+	dnsdomain, domaindn, lp, use_ntvfs, resume_on_error):
     """Set the ACL for the sysvol share and the subfolders
 
     :param samdb: An LDB object on the SAM db
+    :param logger: Logger object
     :param netlogon: Physical path for the netlogon folder
     :param sysvol: Physical path for the sysvol folder
     :param uid: The UID of the "Administrator" user
@@ -1558,6 +1572,8 @@ def setsysvolacl(samdb, netlogon, sysvol, uid, gid, domainsid, dnsdomain,
     :param domainsid: The SID of the domain
     :param dnsdomain: The DNS name of the domain
     :param domaindn: The DN of the domain (ie. DC=...)
+    :param resume_on_error: A boolean that indicates if the function should
+            only log a NTSTATUSError and continue.
     """
     s4_passdb = None
 
@@ -1620,25 +1636,31 @@ def setsysvolacl(samdb, netlogon, sysvol, uid, gid, domainsid, dnsdomain,
         canchown = True
 
     # Set the SYSVOL_ACL on the sysvol folder and subfolder (first level)
-    setntacl(lp,sysvol, SYSVOL_ACL, str(domainsid), use_ntvfs=use_ntvfs,
-             skip_invalid_chown=True, passdb=s4_passdb,
-             service=SYSVOL_SERVICE)
+    set_nt_acl_wrapper(lp, sysvol, SYSVOL_ACL, str(domainsid),
+                       use_ntvfs=use_ntvfs, skip_invalid_chown=True,
+                       passdb=s4_passdb, service=SYSVOL_SERVICE, logger=logger,
+                       resume_on_error=resume_on_error)
     for root, dirs, files in os.walk(sysvol, topdown=False):
         for name in files:
             if use_ntvfs and canchown:
                 os.chown(os.path.join(root, name), -1, gid)
-            setntacl(lp, os.path.join(root, name), SYSVOL_ACL, str(domainsid),
-                     use_ntvfs=use_ntvfs, skip_invalid_chown=True,
-                     passdb=s4_passdb, service=SYSVOL_SERVICE)
+            set_nt_acl_wrapper(lp, os.path.join(root, name), SYSVOL_ACL,
+                               str(domainsid), use_ntvfs=use_ntvfs,
+                               skip_invalid_chown=True, passdb=s4_passdb,
+                               service=SYSVOL_SERVICE, logger=logger,
+                               resume_on_error=resume_on_error)
         for name in dirs:
             if use_ntvfs and canchown:
                 os.chown(os.path.join(root, name), -1, gid)
-            setntacl(lp, os.path.join(root, name), SYSVOL_ACL, str(domainsid),
-                     use_ntvfs=use_ntvfs, skip_invalid_chown=True,
-                     passdb=s4_passdb, service=SYSVOL_SERVICE)
+            set_nt_acl_wrapper(lp, os.path.join(root, name), SYSVOL_ACL,
+                               str(domainsid), use_ntvfs=use_ntvfs,
+                               skip_invalid_chown=True, passdb=s4_passdb,
+                               service=SYSVOL_SERVICE, logger=logger,
+                               resume_on_error=resume_on_error)
 
     # Set acls on Policy folder and policies folders
-    set_gpos_acl(sysvol, dnsdomain, domainsid, domaindn, samdb, lp, use_ntvfs, passdb=s4_passdb)
+    set_gpos_acl(sysvol, logger, dnsdomain, domainsid, domaindn, samdb, lp,
+                 use_ntvfs, passdb=s4_passdb, resume_on_error=resume_on_error)
 
 def acl_type(direct_db_access):
     if direct_db_access:
@@ -1833,9 +1855,10 @@ def provision_fill(samdb, secrets_ldb, logger, names, paths,
         # Continue setting up sysvol for GPO. This appears to require being
         # outside a transaction.
         if not skip_sysvolacl:
-            setsysvolacl(samdb, paths.netlogon, paths.sysvol, paths.root_uid,
-                         paths.root_gid, names.domainsid, names.dnsdomain,
-                         names.domaindn, lp, use_ntvfs)
+            setsysvolacl(samdb, logger, paths.netlogon, paths.sysvol,
+                         paths.root_uid, paths.root_gid, names.domainsid,
+                         names.dnsdomain, names.domaindn, lp, use_ntvfs,
+                         resume_on_error=False)
         else:
             logger.info("Setting acl on sysvol skipped")
 

@@ -847,10 +847,11 @@ Please fix this account before attempting to upgrade again
         logger.info("Administrator password has been set to password of user '%s'", admin_user)
 
     if result.server_role == "active directory domain controller":
-        setsysvolacl(result.samdb, result.paths.netlogon, result.paths.sysvol,
-                result.paths.root_uid, result.paths.root_gid,
-                security.dom_sid(result.domainsid), result.names.dnsdomain,
-                result.names.domaindn, result.lp, use_ntvfs)
+        setsysvolacl(result.samdb, logger, result.paths.netlogon,
+                result.paths.sysvol, result.paths.root_uid,
+                result.paths.root_gid, security.dom_sid(result.domainsid),
+                result.names.dnsdomain, result.names.domaindn, result.lp,
+                use_ntvfs, resume_on_error=False)
 
     # FIXME: import_registry(registry.Registry(), samba3.get_registry())
     # FIXME: shares

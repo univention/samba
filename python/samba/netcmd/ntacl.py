@@ -233,10 +233,10 @@ class cmd_ntacl_sysvolreset(Command):
         if use_ntvfs:
             logger.warning("Please note that POSIX permissions have NOT been changed, only the stored NT ACL")
 
-        provision.setsysvolacl(samdb, netlogon, sysvol,
-                               LA_uid, BA_gid, domain_sid,
-                               lp.get("realm").lower(), samdb.domain_dn(),
-                               lp, use_ntvfs=use_ntvfs)
+        provision.setsysvolacl(samdb, logger, netlogon, sysvol, LA_uid, BA_gid,
+                               domain_sid, lp.get("realm").lower(),
+                               samdb.domain_dn(), lp, use_ntvfs=use_ntvfs,
+                               resume_on_error=False)
 
 class cmd_ntacl_sysvolcheck(Command):
     """Check sysvol ACLs match defaults (including correct ACLs on GPOs)."""
