@@ -27,6 +27,7 @@
 __docformat__ = "restructuredText"
 
 from base64 import b64encode
+import ctypes
 import errno
 import os
 import re
@@ -51,6 +52,7 @@ from samba.dsdb import DS_DOMAIN_FUNCTION_2000
 from samba import (
     Ldb,
     MAX_NETBIOS_NAME_LEN,
+    NTSTATUSError,
     check_all_substituted,
     is_valid_netbios_char,
     setup_file,
@@ -126,6 +128,8 @@ DEFAULT_POLICY_GUID = "31B2F340-016D-11D2-945F-00C04FB984F9"
 DEFAULT_DC_POLICY_GUID = "6AC1786C-016F-11D2-945F-00C04FB984F9"
 DEFAULTSITE = "Default-First-Site-Name"
 LAST_PROVISION_USN_ATTRIBUTE = "lastProvisionUSN"
+
+NT_STATUS_OBJECT_NAME_NOT_FOUND = 0xc0000034
 
 
 class ProvisionPaths(object):
@@ -1481,6 +1485,25 @@ def fill_samdb(samdb, lp, names, logger, policyguid,
 SYSVOL_ACL = "O:LAG:BAD:P(A;OICI;0x001f01ff;;;BA)(A;OICI;0x001200a9;;;SO)(A;OICI;0x001f01ff;;;SY)(A;OICI;0x001200a9;;;AU)"
 POLICIES_ACL = "O:LAG:BAD:P(A;OICI;0x001f01ff;;;BA)(A;OICI;0x001200a9;;;SO)(A;OICI;0x001f01ff;;;SY)(A;OICI;0x001200a9;;;AU)(A;OICI;0x001301bf;;;PA)"
 SYSVOL_SERVICE="sysvol"
+
+def set_nt_acl_wrapper(lp, file, sddl, domsid, backend=None, eadbfile=None,
+    use_ntvfs=True, skip_invalid_chown=False, passdb=None, service=None,
+    logger=None, resume_on_error=False):
+    """A wrapper around setntacl() that catches NTSTATUSError and only logs
+    them if a logger is given and resume_on_error is True.
+    """
+    try:
+        setntacl(lp, file, sddl, domsid, backend=backend, eadbfile=eadbfile,
+                 use_ntvfs=use_ntvfs, skip_invalid_chown=skip_invalid_chown,
+                 passdb=passdb, service=service)
+    except NTSTATUSError as error:
+        err_value = ctypes.c_uint32(error[0]).value
+        only_log = err_value == NT_STATUS_OBJECT_NAME_NOT_FOUND
+        if resume_on_error and logger and only_log:
+            logger.warning('Unable to set ACL %s on %s' % (sddl, file))
+        else:
+            raise
+
 
 def set_dir_acl(path, acl, lp, domsid, use_ntvfs, passdb, service=SYSVOL_SERVICE):
     setntacl(lp, path, acl, domsid, use_ntvfs=use_ntvfs, skip_invalid_chown=True, passdb=passdb, service=service)
